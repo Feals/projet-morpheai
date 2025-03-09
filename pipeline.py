@@ -18,7 +18,7 @@ from sklearn.base import BaseEstimator, TransformerMixin
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
 from sklearn.model_selection import GridSearchCV
-from sklearn.multioutput import MultiOutputClassifier
+from sklearn.multioutput import MultiOutputClassifier, MultiOutputRegressor
 
 # Preprocessing for numerical data
 numerical_cols = ['Male', 'Animal', 'Friends', 'Family', 'Dead&Imaginary', 'Aggression/Friendliness', 'NegativeEmotions']
@@ -246,10 +246,16 @@ joblib.dump(model_regressor, "model_regressor_pipeline.pkl")
 
 
 # Définition de la grille de recherche pour optimiser les hyperparamètres
-param_grid = {
+param_grid_classifier = {
     'estimator__model_classifier__n_estimators': [50, 100, 200], 
     'estimator__model_classifier__learning_rate': [0.01, 0.1, 0.2],
     'estimator__model_classifier__max_depth': [3, 5, 7]
+}
+
+param_grid_regressor = {
+    'estimator__model_regressor__n_estimators': [50, 100, 200], 
+    'estimator__model_regressor__learning_rate': [0.01, 0.1, 0.2],
+    'estimator__model_regressor__max_depth': [3, 5, 7]
 }
 
 model_classifier = Pipeline(steps=[
@@ -260,11 +266,12 @@ model_regressor = Pipeline(steps=[
     ('model_regressor', GradientBoostingRegressor(random_state=42)),
 ])
 multi_target_classifier = MultiOutputClassifier(model_classifier)
+multi_target_regressor = MultiOutputRegressor(model_regressor)
 # GridSearchCV pour la classification
-grid_search_classifier = GridSearchCV(multi_target_classifier, param_grid, cv=5, scoring='accuracy', n_jobs=-1, error_score="raise")
+grid_search_classifier = GridSearchCV(multi_target_classifier, param_grid_classifier, cv=5, scoring='accuracy', n_jobs=-1, error_score="raise")
 
 # GridSearchCV pour la régression
-grid_search_regressor = GridSearchCV(model_regressor, param_grid, cv=5, scoring='r2', n_jobs=-1)
+grid_search_regressor = GridSearchCV(multi_target_regressor, param_grid_regressor, cv=5, scoring='r2', n_jobs=-1)
 
 # Sauvegarde du pipeline complet (prétraitement + modèle)
 joblib.dump(grid_search_classifier, "model_grid_search_classifier_pipeline.pkl")

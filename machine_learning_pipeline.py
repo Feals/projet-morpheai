@@ -12,7 +12,7 @@ model_grid_search_classifier = joblib.load("model_grid_search_classifier_pipelin
 model_grid_search_regressor = joblib.load("model_grid_search_regressor_pipeline.pkl")
 
 # Charger le dataset
-df = pd.read_csv("dream_data_dryad.tsv", sep='\t').head(50)
+df = pd.read_csv("dream_data_dryad.tsv", sep='\t')
 
 
 # Supprimer les colonnes inutiles
@@ -60,34 +60,18 @@ y_classification = df_transformed[list(cat_feature_names)]  # Labels de classifi
 y_regression = df_transformed[numerical_cols]  # Labels de régression
 
 class_counts = y_classification.sum(axis=0)
-classes_to_drop = class_counts.loc[class_counts < 2].index
+classes_to_drop = class_counts.loc[class_counts < 4].index
 y_class_filtered = y_classification.drop(classes_to_drop, axis=1)
-print("classes_to_drop", classes_to_drop)
-
+print("y_class_filtered", y_class_filtered.sum(axis=0))
 # Séparer les jeux de données
 X_train, X_test, y_class_train, y_class_test, y_reg_train, y_reg_test = train_test_split(
-    X, y_class_filtered, y_regression, test_size=0.2, random_state=0
+    X, y_class_filtered, y_regression, test_size=0.2, random_state=42
 )
+
 class_counts_train = y_class_train.sum(axis=0)
-classes_to_drop = class_counts_train.loc[class_counts_train < 2].index
-print("classes_to_drop", classes_to_drop)
-y_class_train_filtered = y_class_train.drop(classes_to_drop, axis=1)
-class_counts_2 = y_class_train_filtered.sum(axis=0)
-print("class_counts_2", class_counts_2)
-
-
+print("class_counts_train", class_counts_train)
 class_counts_test = y_class_test.sum(axis=0)
-classes_to_drop = class_counts_test.loc[class_counts_test < 2].index
-print("classes_to_drop", classes_to_drop)
-y_class_test_filtered = y_class_test.drop(classes_to_drop, axis=1)
-class_counts_3 = y_class_test_filtered.sum(axis=0)
-print("class_counts_3", class_counts_3)
-
-
-print("Colonnes y_class_train_filtered:", y_class_train_filtered.columns)
-print("Colonnes y_class_test_filtered:", y_class_test_filtered.columns)
-
-y_class_test_filtered = y_class_test_filtered.reindex(columns=y_class_train_filtered.columns, fill_value=0)
+print("class_counts_test", class_counts_test)
 
 
 '''
@@ -127,17 +111,17 @@ print('R2 Régression:', r2)
 
 
 # --- Classification ---
-model_grid_search_classifier.fit(X_train, y_class_train_filtered)
+model_grid_search_classifier.fit(X_train, y_class_train)
 
 y_class_preds = model_grid_search_classifier.predict(X_test)
 
 # Calculer la précision
-accuracy = accuracy_score(y_class_test_filtered, y_class_preds)
+accuracy = accuracy_score(y_class_test, y_class_preds)
 print('Accuracy Classification:', accuracy)
 
 # Classification : Rapport de classification (précision, rappel, F-mesure)
 print("\nClassification Report:")
-print(classification_report(y_class_test_filtered, y_class_preds))
+print(classification_report(y_class_test, y_class_preds))
 
 # --- Régression ---
 model_grid_search_regressor.fit(X_train, y_reg_train)
