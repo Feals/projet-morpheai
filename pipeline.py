@@ -13,12 +13,12 @@ from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import joblib
-from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.base import BaseEstimator, TransformerMixin
 import numpy as np
 from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
 from sklearn.model_selection import GridSearchCV
 from sklearn.multioutput import MultiOutputClassifier, MultiOutputRegressor
+from scipy.sparse import hstack, csr_matrix
 
 # Preprocessing for numerical data
 numerical_cols = ['Male', 'Animal', 'Friends', 'Family', 'Dead&Imaginary', 'Aggression/Friendliness', 'NegativeEmotions']
@@ -65,13 +65,13 @@ class MultiLabelBinarizerTransformer(BaseEstimator, TransformerMixin):
             # crée les valeurs binaires pour chaques colonnes dans une list
             transformed_column = self.mlb_dict[column].transform(X[column])
             # on sauvegarde ces valeurs dans la variable transformed
-            transformed_data.append(transformed_column)
+            transformed_data.append(csr_matrix(transformed_column))  # Convertir directement en matrice creuse
         
-        # Empile horizontalement les données transformées
-        transformed_data = np.hstack(transformed_data)
+        # Empiler horizontalement les données transformées en matrices creuses
+        transformed_data = hstack(transformed_data)
         # Générer un DataFrame avec les bonnes colonnes
-        column_names = self.get_feature_names_out(X.columns)        
-        transformed_data = pd.DataFrame(transformed_data, columns=column_names)
+        column_names = self.get_feature_names_out(X.columns)    
+        transformed_data = pd.DataFrame.sparse.from_spmatrix(transformed_data, columns=column_names)
         return transformed_data
 
     def get_feature_names_out(self, input_features=None):
@@ -169,7 +169,7 @@ class VectorizerProcessor(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         # Apprendre le vocabulaire de chaque colonne
         for column in X.columns:
-            encodage = TfidfVectorizer()
+            encodage = TfidfVectorizer(max_features=5000)
             encodage.fit(X[column])  # Apprentissage du vocabulaire
             self.vectorizer[column] = encodage  # Stockage du vectorizer pour chaque colonne
         return self
@@ -180,15 +180,13 @@ class VectorizerProcessor(BaseEstimator, TransformerMixin):
         # Transformer chaque colonne
         for column in X.columns:
             transformed_column = self.vectorizer[column].transform(X[column])  # Transformation avec le bon vectorizer
-            transformed_data.append(transformed_column.toarray())  # Conversion en array dense pour empilement
+            transformed_data.append(csr_matrix(transformed_column))
 
         # Empiler horizontalement les données transformées
-        transformed_data = np.hstack(transformed_data)
-
+        transformed_data = hstack(transformed_data)
         # Générer un DataFrame avec les bonnes colonnes
-        column_names = self.get_feature_names_out(X.columns)
-
-        transformed_data = pd.DataFrame(transformed_data, columns=column_names)
+        column_names = self.get_feature_names_out(X.columns)    
+        transformed_data = pd.DataFrame.sparse.from_spmatrix(transformed_data, columns=column_names)
         return transformed_data
 
     def get_feature_names_out(self, input_features=None):
