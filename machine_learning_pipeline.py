@@ -62,13 +62,12 @@ for chunk in df:
 
 # machine learning
     # Séparer les variables X et y
+
     X = df_transformed  # Toutes les features transformées
     X = X.drop(num_feature_names + cat_feature_names, axis=1)
-    print("X", X)
-    y_classification = df_transformed[list(cat_feature_names)]  # Labels de classification
-    print("y_classification", y_classification)
-    y_regression = df_transformed[numerical_cols]  # Labels de régression
-    print("y_regression", y_regression)
+    X = X.astype('float32')
+    y_classification = df_transformed[list(cat_feature_names)].astype('float32')  # Labels de classification
+    y_regression = df_transformed[numerical_cols].astype('float32')  # Labels de régression
     class_counts = y_classification.sum(axis=0)
     classes_to_drop = class_counts.loc[class_counts < 10].index
     y_class_filtered = y_classification.drop(classes_to_drop, axis=1)
