@@ -14,7 +14,7 @@ model_grid_search_regressor = joblib.load("model_grid_search_regressor_pipeline.
 
 
 
-chunk_size = 1000
+chunk_size = 50
 
 # Charger le dataset
 df = pd.read_csv("dream_data_dryad.tsv", sep='\t',  chunksize=chunk_size)
@@ -54,6 +54,7 @@ for chunk in df:
     # Convertir en DataFrame pour affichage
     df_transformed = pd.DataFrame(data_transformed, columns=all_feature_names)
     df_transformed.to_csv("df_transformed.csv", index=False)
+    print("df_transformed", df_transformed)
 
 
 
@@ -63,9 +64,11 @@ for chunk in df:
     # Séparer les variables X et y
     X = df_transformed  # Toutes les features transformées
     X = X.drop(num_feature_names + cat_feature_names, axis=1)
+    print("X", X)
     y_classification = df_transformed[list(cat_feature_names)]  # Labels de classification
+    print("y_classification", y_classification)
     y_regression = df_transformed[numerical_cols]  # Labels de régression
-
+    print("y_regression", y_regression)
     class_counts = y_classification.sum(axis=0)
     classes_to_drop = class_counts.loc[class_counts < 10].index
     y_class_filtered = y_classification.drop(classes_to_drop, axis=1)

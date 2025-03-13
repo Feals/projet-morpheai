@@ -2,6 +2,11 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import joblib  # Pour charger le modèle ML
 import numpy as np
+from dotenv import load_dotenv
+import os
+
+# Charger les variables d'environnement
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)  # Permet à React d’accéder à l’API
@@ -11,14 +16,13 @@ model_classifier = joblib.load("model_grid_search_classifier.pkl")
 model_regressor = joblib.load("dream_model_regressor.pkl")  # Si ton modèle utilise du texte
 vectorizer = joblib.load("preprocessor_pipeline.pkl")
 
-
-
 @app.route("/classificationDream/request", methods=["POST"])
 def classify_dream():
     try:
         data = request.get_json()
+        print("data",data)
         dream_text = data.get("dream")  # Récupération de la description du rêve
-
+        print("dream_text",dream_text)
         if not dream_text:
             return jsonify({"error": "No dream provided"}), 400
 
@@ -33,10 +37,16 @@ def classify_dream():
         prediction_regressor = model_regressor.predict(dream_vector)[0]
         confidence_regressor = model_regressor.predict_proba(dream_vector).max()
 
-        return jsonify({"prediction_classifier": prediction_classifier, "confidence_classifier": confidence_classifier, "prediction_regressor": confidence_regressor, "confidence": confidence_regressor})
+        return jsonify({
+            "prediction_classifier": prediction_classifier,
+            "confidence_classifier": confidence_classifier,
+            "prediction_regressor": prediction_regressor,
+            "confidence": confidence_regressor
+        })
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    port = os.getenv("PORT", 5000)  # Récupérer la valeur du PORT de l'environnement
+    app.run(debug=True, host="0.0.0.0", port=int(port))
