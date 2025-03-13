@@ -1,3 +1,4 @@
+import os
 from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
@@ -18,16 +19,19 @@ from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegress
 from sklearn.model_selection import GridSearchCV
 from sklearn.multioutput import MultiOutputClassifier, MultiOutputRegressor
 from scipy.sparse import hstack, csr_matrix
+import numpy as np
+from joblib import Memory
 
 # Preprocessing for numerical data
 numerical_cols = ['Male', 'Animal', 'Friends', 'Family', 'Dead&Imaginary', 'Aggression/Friendliness', 'NegativeEmotions']
+numerical_transformer_memory = Memory(location=None, verbose=0)
 
 numerical_transformer = Pipeline(steps=[
     # imputation des données vide, on remplace ces cellules par 0
     ('imputer', SimpleImputer(strategy="constant", fill_value=0)),
     # Normalisation, on s'assure que les données soient bien compris entre 0 et 1
     ('minMax', MinMaxScaler())
-])
+], memory = numerical_transformer_memory)
 
 
 # Preprocessing for categorical data
@@ -81,10 +85,11 @@ class MultiLabelBinarizerTransformer(BaseEstimator, TransformerMixin):
         return column_names
 
 # Transformer catégoriel pour les colonnes où les codes sont séparés par des virgules
+memory_categorical_transformer = Memory(location=None, verbose=0)
 categorical_transformer = Pipeline(steps=[
     ('clean_columns', FunctionTransformer(clean_code_column)),
     ("mlb", MultiLabelBinarizerTransformer())
-])
+], memory=memory_categorical_transformer)
 
 # Preprocessing for text
 text_cols = ['text_dream']
@@ -168,7 +173,7 @@ class VectorizerProcessor(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         # Apprendre le vocabulaire de chaque colonne
         for column in X.columns:
-            encodage = TfidfVectorizer(max_features=5000)
+            encodage = TfidfVectorizer(max_features=5000 , dtype=np.float32 )
             encodage.fit(X[column])  # Apprentissage du vocabulaire
             self.vectorizer[column] = encodage  # Stockage du vectorizer pour chaque colonne
         return self
@@ -197,12 +202,14 @@ class VectorizerProcessor(BaseEstimator, TransformerMixin):
         return column_names
 
    
+# Stockage temporaire en RAM (ou sur disque avec location="/tmp")
+memory_text_transformer = Memory(location=None, verbose=0)
 
 text_transformer = Pipeline(steps=[
     ('filter_empty_text', FunctionTransformer(filter_empty_text, validate=False)),  # Fonction de filtrage des textes vides
     ('nlp', TextProcessor()),  # Traitement NLP
     ('vectorizer', VectorizerProcessor()),  # encodage
-])
+], memory = memory_text_transformer)
 
 
 
@@ -243,11 +250,6 @@ joblib.dump(model_regressor, "model_regressor_pipeline.pkl")
 
 
 # Définition de la grille de recherche pour optimiser les hyperparamètres
-param_grid_classifier = {
-    'estimator__model_classifier__n_estimators': [50, 100, 200], 
-    'estimator__model_classifier__learning_rate': [0.01, 0.1, 0.2],
-    'estimator__model_classifier__max_depth': [3, 5, 7]
-}
 
 param_grid_regressor = {
     'estimator__model_regressor__n_estimators': [50, 100, 200], 
@@ -264,8 +266,20 @@ model_regressor = Pipeline(steps=[
 ])
 multi_target_classifier = MultiOutputClassifier(model_classifier)
 multi_target_regressor = MultiOutputRegressor(model_regressor)
+
 # GridSearchCV pour la classification
-grid_search_classifier = GridSearchCV(multi_target_classifier, param_grid_classifier, cv=5, scoring='accuracy', n_jobs=-1, error_score="raise")
+param_grid_classifier = {
+    'estimator__model_classifier__n_estimators': [50,  200], 
+    'estimator__model_classifier__learning_rate': [0.01, 0.2],
+    'estimator__model_classifier__max_depth': [3, 7]
+}
+
+grid_search_classifier = GridSearchCV(  multi_target_classifier, 
+                                        param_grid_classifier, 
+                                        cv=3, scoring='accuracy',
+                                        n_jobs=min(4, os.cpu_count()),  # Limiter à 4 coeurs
+                                        pre_dispatch='2*n_jobs',     # Éviter la surcharge  
+                                        error_score="raise")
 
 # GridSearchCV pour la régression
 grid_search_regressor = GridSearchCV(multi_target_regressor, param_grid_regressor, cv=5, scoring='r2', n_jobs=-1)

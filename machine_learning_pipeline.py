@@ -1,3 +1,4 @@
+import time
 import joblib
 import pandas as pd
 from pipeline import clean_code_column
@@ -13,15 +14,14 @@ model_grid_search_classifier = joblib.load("model_grid_search_classifier_pipelin
 model_grid_search_regressor = joblib.load("model_grid_search_regressor_pipeline.pkl")
 
 
-
-chunk_size = 1000
+# 1000 trop long
+chunk_size = 50
 
 # Charger le dataset
 df = pd.read_csv("dream_data_dryad.tsv", sep='\t',  chunksize=chunk_size)
 
 # Supprimer les colonnes inutiles
-columns_to_drop = ['A/CIndex', 'F/CIndex', 'S/CIndex', "dream_id", "dreamer", 
-                      "description", "dream_date", "dream_language"]
+columns_to_drop = ['A/CIndex', 'F/CIndex', 'S/CIndex', "dream_id", "dreamer", "description", "dream_date", "dream_language"]
 
 # Définir les colonnes numériques et catégoriques
 numerical_cols = ['Male', 'Animal', 'Friends', 'Family', 'Dead&Imaginary', 'Aggression/Friendliness', 'NegativeEmotions']
@@ -35,6 +35,8 @@ iteration_count = 0
 for chunk in df:
     iteration_count += 1
     print("iteration_count", iteration_count)
+    start_time = time.time()
+
     # Supprimer les colonnes inutiles
     chunk = chunk.drop(columns=columns_to_drop, errors='ignore')
     chunk_train = chunk[df_train_columns]
@@ -53,7 +55,9 @@ for chunk in df:
 
     # Convertir en DataFrame pour affichage
     df_transformed = pd.DataFrame(data_transformed, columns=all_feature_names)
-    df_transformed.to_csv("df_transformed.csv", index=False)
+    #df_transformed.to_csv("df_transformed.csv", index=False)
+    
+
 
 
 
@@ -71,7 +75,7 @@ for chunk in df:
     y_class_filtered = y_classification.drop(classes_to_drop, axis=1)
     # Séparer les jeux de données
     X_train, X_test, y_class_train, y_class_test, y_reg_train, y_reg_test = train_test_split(
-    X, y_class_filtered, y_regression, test_size=0.2, random_state=42
+    X, y_class_filtered, y_regression,  test_size=0.2, random_state=42
     )
 
     # Gradiant Boost
@@ -88,7 +92,7 @@ for chunk in df:
 
     # Classification : Rapport de classification (précision, rappel, F-mesure)
     print("\nClassification Report:")
-    print(classification_report(y_class_test, y_class_preds))
+    print(classification_report(y_class_test, y_class_preds, zero_division=0))
 
     comparison_class = pd.DataFrame({"Réel": y_class_test.values.flatten(), "Prédit": y_class_preds.flatten()})
     print("\n📊 Comparaison Classification:")
@@ -113,6 +117,10 @@ for chunk in df:
     comparison_reg = pd.DataFrame({"Réel": y_reg_test.values.flatten(), "Prédit": y_reg_preds.flatten()})
     print("\n📊 Comparaison Régression:")
     print(comparison_reg.head(10))
+
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    print(f"Temps pour l'itération {iteration_count}: {elapsed_time:.6f} secondes")
 
 
 # 12. **Sauvegarde du modèle optimisé**
