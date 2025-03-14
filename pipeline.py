@@ -1,8 +1,7 @@
 import os
-from sklearn.impute import SimpleImputer
+
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.preprocessing import FunctionTransformer
 from sklearn.preprocessing import MultiLabelBinarizer
 import pandas as pd
@@ -12,26 +11,15 @@ import nltk
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 import joblib
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn.ensemble import GradientBoostingClassifier, GradientBoostingRegressor
 from sklearn.model_selection import GridSearchCV
-from sklearn.multioutput import MultiOutputClassifier, MultiOutputRegressor
+from sklearn.multioutput import MultiOutputClassifier
 from scipy.sparse import hstack, csr_matrix
 import numpy as np
 from joblib import Memory
+from xgboost import XGBClassifier 
 
-# Preprocessing for numerical data
-numerical_cols = ['Male', 'Animal', 'Friends', 'Family', 'Dead&Imaginary', 'Aggression/Friendliness', 'NegativeEmotions']
-numerical_transformer_memory = Memory(location=None, verbose=0)
-
-numerical_transformer = Pipeline(steps=[
-    # imputation des données vide, on remplace ces cellules par 0
-    ('imputer', SimpleImputer(strategy="constant", fill_value=0)),
-    # Normalisation, on s'assure que les données soient bien compris entre 0 et 1
-    ('minMax', MinMaxScaler())
-], memory = numerical_transformer_memory)
 
 
 # Preprocessing for categorical data
@@ -219,7 +207,6 @@ text_transformer = Pipeline(steps=[
 # Bundle preprocessing for numerical and categorical data
 preprocessor = ColumnTransformer(
     transformers=[
-        ('num', numerical_transformer, numerical_cols),
         ('cat', categorical_transformer, categorical_cols),
         ('text', text_transformer, text_cols),
     ])
@@ -230,42 +217,18 @@ preprocessor = ColumnTransformer(
 
 
 # pipeline modele
-
-model_classifier = Pipeline(steps=[
-    ('classifier', RandomForestClassifier(n_estimators=100, random_state=42)),  # Entraînement du modèle RandomForest
-])
-
-model_regressor = Pipeline(steps=[
-    ('classifier', RandomForestRegressor(n_estimators=100, random_state=42)),  # Entraînement du modèle RandomForest
-])
-
-
-
-# Sauvegarde du pipeline de prétraitement
 joblib.dump(preprocessor, "preprocessor_pipeline.pkl")
-
-# Sauvegarde du pipeline complet (prétraitement + modèle)
-joblib.dump(model_classifier, "model_classifier_pipeline.pkl")
-joblib.dump(model_regressor, "model_regressor_pipeline.pkl")
 
 
 # Définition de la grille de recherche pour optimiser les hyperparamètres
 
-param_grid_regressor = {
-    'estimator__model_regressor__n_estimators': [50, 100, 200], 
-    'estimator__model_regressor__learning_rate': [0.01, 0.1, 0.2],
-    'estimator__model_regressor__max_depth': [3, 5, 7]
-}
+
 
 model_classifier = Pipeline(steps=[
-    ('model_classifier', GradientBoostingClassifier(random_state=42)),
+    ('model_classifier', XGBClassifier(random_state=42, eval_metric='logloss')),
 ])
 
-model_regressor = Pipeline(steps=[
-    ('model_regressor', GradientBoostingRegressor(random_state=42)),
-])
 multi_target_classifier = MultiOutputClassifier(model_classifier)
-multi_target_regressor = MultiOutputRegressor(model_regressor)
 
 # GridSearchCV pour la classification
 param_grid_classifier = {
@@ -281,9 +244,6 @@ grid_search_classifier = GridSearchCV(  multi_target_classifier,
                                         pre_dispatch='2*n_jobs',     # Éviter la surcharge  
                                         error_score="raise")
 
-# GridSearchCV pour la régression
-grid_search_regressor = GridSearchCV(multi_target_regressor, param_grid_regressor, cv=5, scoring='r2', n_jobs=-1)
 
 # Sauvegarde du pipeline complet (prétraitement + modèle)
 joblib.dump(grid_search_classifier, "model_grid_search_classifier_pipeline.pkl")
-joblib.dump(grid_search_regressor, "model_grid_search_regressor_pipeline.pkl")
