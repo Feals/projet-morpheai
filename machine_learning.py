@@ -11,76 +11,60 @@ from sklearn.metrics import (
 )
 import os
 
-
-# Charger le pipeline de prétraitement
-preprocessor = joblib.load("preprocessor_pipeline.pkl")
-
 # Charger le modèle pré-entraîné
 model_grid_search_classifier = joblib.load("model_grid_search_classifier_pipeline.pkl")
 
-# Charger le dataset par chunks
-chunk_size = 200
-df = pd.read_csv("dream_data_dryad.tsv", sep='\t', chunksize=chunk_size)
+# Charger le dataset par chunks par 1000
+chunk_size = 500
+df = pd.read_csv("test_df_after_preprocessing.csv", chunksize=chunk_size)
 
-# Colonnes à supprimer
-columns_to_drop = ['A/CIndex', 'F/CIndex', 'S/CIndex', "dream_id", "dreamer", "description", 
-                   "dream_date", "dream_language", 'Male', 'Animal', 'Friends', 'Family', 
-                   'Dead&Imaginary', 'Aggression/Friendliness', 'NegativeEmotions']
-
-categorical_cols = ["characters_code", "emotions_code", "aggression_code", "friendliness_code", "sexuality_code"]
-
-
+# récupérer le nom des colonnes pour les features
+columns_to_X = ['text_lemmatized', 'entities', 'dependencies']
 categorical_cols_for_trainning_model = ["characters_code"]
+for colmumns in df:
+        nlp_types_labels = [col for col in colmumns if col.startswith(tuple(columns_to_X))]
+        if not nlp_types_labels:
+            print(f"Aucune colonne trouvée pour {nlp_types_labels}, on passe.")
 
-
-text_cols = ["text_dream"]
-df_train_columns = categorical_cols + text_cols
-
+# initialisation du nombre d'itération
 iteration_count = 0
 
+# réinitialisation du dataframe qui a été consommé précédement
+df = pd.read_csv("test_df_after_preprocessing.csv", chunksize=chunk_size)
 for chunk in df:
     iteration_count += 1
     print("Iteration:", iteration_count)
+    # permet de lancer un chronométre afin de connaître le temps d'une itération 
     start_time = time.time()
 
-    # Nettoyage et transformation
-    chunk = chunk.drop(columns=columns_to_drop, errors='ignore')
-    chunk_train = chunk[df_train_columns]
-    data_transformed = preprocessor.fit_transform(chunk_train)
-    end_time_preprocessing = time.time()
-    print(f"Temps pour l'itération {iteration_count}: {end_time_preprocessing - start_time:.6f} secondes")
-    # Récupération des noms de colonnes après transformation
-    cat_feature_names = preprocessor.transformers_[0][1].named_steps['mlb'].get_feature_names_out(categorical_cols)
-    vectorizer_feature_names = preprocessor.transformers_[1][1].named_steps['vectorizer'].get_feature_names_out()
-    all_feature_names = list(cat_feature_names) + list(vectorizer_feature_names)
-
-    df_transformed = pd.DataFrame(data_transformed, columns=all_feature_names)
-
-    # Séparation des features et labels
-    X = df_transformed.drop(columns=cat_feature_names, axis=1).astype('float32')
+    # Séparation des features au format float32
+    X = chunk[nlp_types_labels].astype('float32')
 
     # Groupement des labels par famille (ex: characters_code_XXXX)
     models = {}
     for category in categorical_cols_for_trainning_model:
-        category_labels = [col for col in cat_feature_names if col.startswith(category)]
+        category_labels = [col for col in chunk if col.startswith(category)]
         
         if not category_labels:
             print(f"Aucune colonne trouvée pour {category}, on passe.")
             continue
-        
-        y = df_transformed[category_labels].astype('float32')
+
+        # Séparation des labels au format float32
+        y = chunk[category_labels].astype('float32')
 
         # Vérifier qu'il y a suffisamment d'échantillons pour entraîner un modèle
         class_counts = y.sum(axis=0)
         classes_to_drop = class_counts.loc[class_counts < 10].index
+        # on supprime les classes qui n'ont pas assez d'échantillons
         y = y.drop(classes_to_drop, axis=1)
-        print("y", y.shape)
+
+        # séparation des jeux de données pour l'entrainement et pour les tests
         X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-        print("y_test", y_test.shape)
-        print("y.columns", y.columns.shape)
+
         # On utilise le modèle Grid Search déjà chargé
-        if os.path.exists("dream_model_characters_code.pkl"):
-            model_grid_search_classifier = joblib.load("dream_model_characters_code.pkl")
+        model_filename = f"dream_model_{category}.pkl"
+        if os.path.exists(model_filename):
+            model_grid_search_classifier = joblib.load(model_filename)
         model = model_grid_search_classifier.fit(X_train, y_train)
 
         y_preds = model.predict(X_test)
@@ -116,7 +100,7 @@ for chunk in df:
         models[category] = model
 
         # Sauvegarde du modèle spécifique à cette famille de labels
-        joblib.dump(model, f'dream_model_{category}.pkl')
+        joblib.dump(model, f'test_dream_model_{category}.pkl')
 
     end_time = time.time()
     print(f"Temps pour l'itération {iteration_count}: {end_time - start_time:.6f} secondes")

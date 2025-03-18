@@ -1,76 +1,42 @@
-from sklearn.preprocessing import StandardScaler, MultiLabelBinarizer
+import joblib
 import pandas as pd
-import numpy as np
-import spacy
-
-# Charger le dataset prétraité
-df = pd.read_csv("dataset_dream_dryad_clean.csv", sep='\t')
-
-df = df.drop(columns=['A/CIndex', 'F/CIndex', 'S/CIndex', "dream_id", "dreamer", "description", "dream_date", "dream_language"], errors='ignore')
-
-# 1. Standardisation des colonnes numériques
-scaler = StandardScaler()
-df[['Male', 'Animal', 'Friends', 'Family', 'Dead&Imaginary', 'Aggression/Friendliness', 'NegativeEmotions']] = scaler.fit_transform(df[['Male', 'Animal', 'Friends', 'Family', 'Dead&Imaginary', 'Aggression/Friendliness', 'NegativeEmotions']])
-
-
-# 2. Transformation des colonnes de codes en One-Hot Encoding multi-label
-def clean_code_column(column):
-    # Enlève les espaces superflus
-    column = column.apply(lambda x: str(x).strip())   
-    return column
+from pipeline_test import clean_code_column, MultiLabelBinarizerTransformer, filter_empty_text
 
 
 
-# Colonnes contenant des codes à transformerpp
-code_columns = ["characters_code", "emotions_code", "aggression_code", "friendliness_code", "sexuality_code"]
 
-# Remplir les NaN dans les colonnes cibles avec des listes vides ou nettoye la colonne avant la transformation
-df[code_columns] = df[code_columns].fillna("").apply(clean_code_column)
+# Charger le pipeline de prétraitement
+preprocessor = joblib.load("test_preprocessor_pipeline.pkl")
 
-# Appliquer le MultiLabelBinarizer sur chaque colonne multi-label
-mlb_encoders = {}  # Dictionnaire pour stocker les encodeurs
-encoded_dfs = []   # Liste pour stocker les nouveaux DataFrames encodés
+# Charger le modèle pré-entraîné
+model_grid_search_classifier = joblib.load("model_grid_search_classifier_pipeline.pkl")
 
-# Appliquer le split sur toutes les colonnes concernées
-for col in code_columns:
-    mlb = MultiLabelBinarizer()
-    # Transformer la colonne en liste de valeurs (split par ",")
-    df[col] = df[col].apply(lambda x: x.split(",") if x else [])  
-    # Encoder la colonne
-    encoded_array = mlb.fit_transform(df[col])
-    # Créer un DataFrame avec les nouvelles colonnes encodées
-    encoded_df = pd.DataFrame(encoded_array, columns=[f"{col}_{cls}" for cls in mlb.classes_])
-    encoded_dfs.append(encoded_df)
-    mlb_encoders[col] = mlb
+df = pd.read_csv("dream_data_dryad.tsv", sep='\t').head(1000)
 
-# Concaténer toutes les nouvelles colonnes encodées avec le DataFrame original
-df_final = pd.concat([df] + encoded_dfs, axis=1)
+# Colonnes à supprimer
+columns_to_drop = ['A/CIndex', 'F/CIndex', 'S/CIndex', "dream_id", "dreamer", "description", 
+                   "dream_date", "dream_language", 'Male', 'Animal', 'Friends', 'Family', 
+                   'Dead&Imaginary', 'Aggression/Friendliness', 'NegativeEmotions']
 
-# Supprimer les anciennes colonnes de codes
-df_final = df_final.drop(columns=code_columns)
-print("df_final", df_final)
+df=df.drop(columns_to_drop, axis=1)
 
-# 3. NLP : Vectorisation des colonnes `entities`, `dependencies`, `unique_lemmas`
-nlp = spacy.load("en_core_web_lg")
-
-# Fonction pour vectoriser chaque liste de mots
-def mean_word_vector(words):
-    vectors = [nlp(word).vector for word in words if word in nlp.vocab]
-    return np.mean(vectors, axis=0) if vectors else np.zeros(nlp.vocab.vectors.shape[1])
+# Colonnes categorielles
+categorical_cols = ["characters_code", "emotions_code", "aggression_code", "friendliness_code", "sexuality_code"]
 
 
-# Vectorisation des colonnes `entities`, `dependencies`, `unique_lemmas`
-df_final["entities_vec"] = df_final["entities"].apply(mean_word_vector)
-df_final["dependencies_vec"] = df_final["dependencies"].apply(mean_word_vector)
-df_final["unique_lemmas_vec"] = df_final["unique_lemmas"].apply(mean_word_vector)
+# Colonne textes
+text_cols = ["text_dream"]
 
-# Supprimer les anciennes colonnes `entities`, `dependencies`, et `unique_lemmas`
-df_final = df_final.drop(columns=["entities", "dependencies", "unique_lemmas"])
+# Entraînement du pipeline de prétraitement...
+data_transformed = preprocessor.fit_transform(df) 
 
-# 4. Résumé des données finales
-print(list(df_final.columns))
-print(df_final.head())
+joblib.dump(preprocessor, "test_preprocessor_pipeline_fit.pkl")
 
-# Sauvegarde du dataset nettoyé
-df_final.to_csv("dataset_dream_dryad_clean_v4.csv", index=False)
-print("Dataset nettoyé et mis à jour.")
+# Récupération des noms de colonnes transformées
+cat_feature_names = preprocessor.transformers_[0][1].named_steps['mlb'].get_feature_names_out(categorical_cols)
+vectorizer_feature_names = preprocessor.transformers_[1][1].named_steps['vectorizer'].get_feature_names_out()
+all_feature_names = cat_feature_names + vectorizer_feature_names
+
+# Conversion en DataFrame
+df_transformed = pd.DataFrame(data_transformed, columns=all_feature_names)
+df_transformed.to_csv("test_df_after_preprocessing.csv", index=False)

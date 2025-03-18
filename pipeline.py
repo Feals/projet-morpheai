@@ -23,10 +23,12 @@ from xgboost import XGBClassifier
 
 
 # Preprocessing for categorical data
+
+
 categorical_cols = ["characters_code", "emotions_code", "aggression_code", "friendliness_code", "sexuality_code"]
 
+# on remplace les cellules vides par une chaine de charactères vide.
 def clean_code_column(column):
-    # on remplace les cellules vides par une chaine de charactères vide.
     column = column.fillna("")
     return column
 
@@ -48,31 +50,28 @@ class MultiLabelBinarizerTransformer(BaseEstimator, TransformerMixin):
             # crée un dictionnaire qui contient l'ensembles des classes
             self.mlb_dict[column] = mlb
         return self
-
     def transform(self, X):      
         transformed_data = []
-        
+    
         for column in X.columns:
-            # crée les valeurs binaires pour chaques colonnes dans une list
             transformed_column = self.mlb_dict[column].transform(X[column])
-            # on sauvegarde ces valeurs dans la variable transformed
-            transformed_data.append(csr_matrix(transformed_column))  # Convertir directement en matrice creuse
-        
-        # Empiler horizontalement les données transformées en matrices creuses
+            transformed_data.append(csr_matrix(transformed_column))
+    
         transformed_data = hstack(transformed_data)
-        # Générer un DataFrame avec les bonnes colonnes
+
+        # Ajoute cette ligne pour voir le nombre de colonnes générées   
         column_names = self.get_feature_names_out(X.columns)    
         transformed_data = pd.DataFrame.sparse.from_spmatrix(transformed_data, columns=column_names)
         return transformed_data
 
+    # permet de donner un nom compréhensible à chaque colonnes binarizé
     def get_feature_names_out(self, input_features=None):
         column_names = []
-        # permet de donner un nom compréhensible à chaque colonnes binarizé
         for column, mlb in self.mlb_dict.items():
             column_names.extend([f"{column}_{cls}" for cls in mlb.classes_])
         return column_names
 
-# Transformer catégoriel pour les colonnes où les codes sont séparés par des virgules
+# Stockage temporaire en RAM (ou sur disque avec location="/tmp")
 memory_categorical_transformer = Memory(location=None, verbose=0)
 categorical_transformer = Pipeline(steps=[
     ('clean_columns', FunctionTransformer(clean_code_column)),
@@ -161,7 +160,7 @@ class VectorizerProcessor(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         # Apprendre le vocabulaire de chaque colonne
         for column in X.columns:
-            encodage = TfidfVectorizer(max_features=5000 , dtype=np.float32 )
+            encodage = TfidfVectorizer(max_features=3000, min_df=5, max_df=0.8, dtype=np.float32)
             encodage.fit(X[column])  # Apprentissage du vocabulaire
             self.vectorizer[column] = encodage  # Stockage du vectorizer pour chaque colonne
         return self
@@ -169,7 +168,7 @@ class VectorizerProcessor(BaseEstimator, TransformerMixin):
     def transform(self, X):
         transformed_data = []
 
-        # Transformer chaque colonne
+        # Transforme chaque colonne
         for column in X.columns:
             transformed_column = self.vectorizer[column].transform(X[column])  # Transformation avec le bon vectorizer
             transformed_data.append(csr_matrix(transformed_column))
@@ -186,7 +185,7 @@ class VectorizerProcessor(BaseEstimator, TransformerMixin):
         for column, encodage in self.vectorizer.items():
             # Récupérer les noms des caractéristiques du vectorizer pour chaque colonne
             feature_names = encodage.get_feature_names_out()
-            column_names.extend([f"{column}_{name}" for name in feature_names])  # Renommer les caractéristiques
+            column_names.extend([f"{column}_{name}" for name in feature_names])  # Renomme les caractéristiques
         return column_names
 
    
@@ -199,11 +198,6 @@ text_transformer = Pipeline(steps=[
     ('vectorizer', VectorizerProcessor()),  # encodage
 ], memory = memory_text_transformer)
 
-
-
-
-
-
 # Bundle preprocessing for numerical and categorical data
 preprocessor = ColumnTransformer(
     transformers=[
@@ -211,18 +205,11 @@ preprocessor = ColumnTransformer(
         ('text', text_transformer, text_cols),
     ])
 
-
-
-
-
-
 # pipeline modele
-joblib.dump(preprocessor, "preprocessor_pipeline.pkl")
+joblib.dump(preprocessor, "test_preprocessor_pipeline.pkl")
 
 
 # Définition de la grille de recherche pour optimiser les hyperparamètres
-
-
 
 model_classifier = Pipeline(steps=[
     ('model_classifier', XGBClassifier(random_state=42, eval_metric='logloss')),
