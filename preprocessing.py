@@ -1,6 +1,6 @@
 import joblib
 import pandas as pd
-from pipeline_test import clean_code_column, MultiLabelBinarizerTransformer, filter_empty_text
+from pipeline import clean_code_column, MultiLabelBinarizerTransformer, filter_empty_text
 
 
 
