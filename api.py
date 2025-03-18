@@ -4,7 +4,7 @@ import joblib  # Pour charger le modèle ML
 from dotenv import load_dotenv
 import os
 import pandas as pd
-from pipeline_test import clean_code_column, MultiLabelBinarizerTransformer, filter_empty_text
+from pipeline import clean_code_column, MultiLabelBinarizerTransformer, filter_empty_text
 
 load_dotenv()
 
