@@ -12,7 +12,8 @@ app = Flask(__name__)
 CORS(app)  # Permet à React d’accéder à l’API
 
 model_classifier = joblib.load("test_dream_model_characters_code.pkl")
-preprocessor = joblib.load("test_preprocessor_pipeline_fit.pkl")
+preprocessor = joblib.load("preprocessor_pipeline.pkl")
+print(preprocessor)
 
 @app.route("/classificationDream/request", methods=["POST"])
 def classify_dream():
