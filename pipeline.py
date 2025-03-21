@@ -46,12 +46,14 @@ class MultiLabelBinarizerTransformer(BaseEstimator, TransformerMixin):
             # transforme le contenu de la cellule en une liste d'élément, les éléments sont découpées par les ","
             #  et ont retire pour chaques éléments de la liste les potentiels espaces avant et après la chaine de charactères
             X[column] = X[column].apply(lambda x: [item.strip() for item in x.split(",")] if x else [])
-
             # Filtrer les labels commençant par un nombre
-            filtered_labels = [
+            if column == "characters_code" :
+                filtered_labels = [
                 [label for label in row if re.match(r'^\d', label)]
                 for row in X[column]
-            ]
+                ]
+            else : filtered_labels = X[column]
+
             
             # Apprendre uniquement sur les labels filtrés
             mlb.fit(filtered_labels)
@@ -154,8 +156,9 @@ class TextProcessor(BaseEstimator, TransformerMixin):
         result_df['text_lemmatized'] = result_df['text_lemmatized'].apply(lambda x: " ".join(x))
         result_df['entities'] = result_df['entities'].apply(lambda x: ", ".join([f"{text}:{label}" for text, label in x]))
         result_df['dependencies'] = result_df['dependencies'].apply(lambda x: ", ".join([f"{word}:{dep}:{head}" for word, dep, head in x]))
-        # Afficher la forme du DataFrame avant la vectorisation        
+        # Afficher la forme du DataFrame avant la vectorisation
         return result_df[['text_lemmatized', 'entities', 'dependencies']]
+    
     
     def get_feature_names_out(self, input_features=None):
         column_names = ['text_lemmatized', 'entities', 'dependencies']
@@ -170,7 +173,7 @@ class VectorizerProcessor(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None):
         # Apprendre le vocabulaire de chaque colonne
         for column in X.columns:
-            encodage = TfidfVectorizer(max_features=3000, min_df=5, max_df=0.8, dtype=np.float32)
+            encodage = TfidfVectorizer(max_features=5000, min_df=5, max_df=0.8, dtype=np.float32)
             encodage.fit(X[column])  # Apprentissage du vocabulaire
             self.vectorizer[column] = encodage  # Stockage du vectorizer pour chaque colonne
         return self
@@ -227,7 +230,8 @@ model_classifier = Pipeline(steps=[
         eval_metric='logloss', 
         base_score=0.5, 
         tree_method='hist', 
-        device='cuda'
+        device = "cuda",
+        subsample=0.8,
     )),
 ])
 
@@ -235,11 +239,9 @@ multi_target_classifier = MultiOutputClassifier(model_classifier)
 
 # GridSearchCV pour la classification
 param_grid_classifier = {
-    'estimator__model_classifier__n_estimators': [50], 
-    'estimator__model_classifier__learning_rate': [0.01],
-    'estimator__model_classifier__max_depth': [3],
-    'estimator__model_classifier__tree_method': ['hist'], 
-    'estimator__model_classifier__device': ['cuda'],
+    'estimator__model_classifier__n_estimators': [800], 
+    'estimator__model_classifier__learning_rate': [0.8],
+    'estimator__model_classifier__max_depth': [5]
 }
 
 grid_search_classifier = GridSearchCV(
@@ -247,7 +249,7 @@ grid_search_classifier = GridSearchCV(
     param_grid_classifier, 
     cv=3, 
     scoring='accuracy',
-    n_jobs=min(4, os.cpu_count()),  # Limiter à 4 coeurs
+    n_jobs=-2,
     pre_dispatch='2*n_jobs',     # Éviter la surcharge  
     error_score="raise"
 )

@@ -39,7 +39,6 @@ def classify_dream():
         vectorized_data = data_transformed[:, :len(vectorizer_feature_names)]  # Garder seulement les colonnes du vectoriseur
         dream_vectorize_df = pd.DataFrame(vectorized_data, columns=vectorizer_feature_names)
         print(dream_vectorize_df[dream_vectorize_df == 1])
-        print("dream_vectorize_df", dream_vectorize_df)
 
         prediction_classifier = model_classifier.predict(dream_vectorize_df)
         print("prediction_classifier", prediction_classifier)

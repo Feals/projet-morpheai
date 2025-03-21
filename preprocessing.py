@@ -25,19 +25,24 @@ categorical_cols = ["characters_code", "emotions_code", "aggression_code", "frie
 text_cols = ["text_dream"]
 
 # Entraînement du pipeline de prétraitement...
-data_transformed = preprocessor.fit_transform(df) 
+data_transformed = preprocessor.fit_transform(df)
 
-joblib.dump(preprocessor, "preprocessor_pipeline.pkl")
-
-# Récupération des noms de colonnes transformées
-cat_feature_names = preprocessor.transformers_[0][1].named_steps['mlb'].get_feature_names_out(categorical_cols)
-vectorizer_feature_names = preprocessor.transformers_[1][1].named_steps['vectorizer'].get_feature_names_out()
-all_feature_names = cat_feature_names + vectorizer_feature_names
+joblib.dump(preprocessor, "preprocessor_pipeline_fit.pkl")
+# Vérification que le préprocesseur est bien ajusté
+try:
+    # Récupération des noms de colonnes transformées
+    cat_feature_names = preprocessor.transformers_[0][1].named_steps['mlb'].get_feature_names_out(categorical_cols)
+    vectorizer_feature_names = preprocessor.transformers_[1][1].named_steps['vectorizer'].get_feature_names_out()
+    all_feature_names = list(cat_feature_names) + list(vectorizer_feature_names)
+    
+    print("Le préprocesseur a été correctement ajusté.")
+except Exception as e:
+    print(f"Erreur lors de la vérification du préprocesseur : {e}")
+    print("Le préprocesseur n'a peut-être pas été correctement ajusté.")
 
 # Conversion en DataFrame
 df_transformed = pd.DataFrame(data_transformed, columns=all_feature_names)
 filtered_columns = [col for col in df_transformed.columns if not any(col.startswith(prefix) for prefix in categorical_cols)]
 
 # Afficher les colonnes restantes
-print(df_transformed[filtered_columns])
 df_transformed.to_csv("test_df_after_preprocessing.csv", index=False)
