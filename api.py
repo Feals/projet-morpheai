@@ -1,6 +1,6 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import joblib  # Pour charger le modèle ML
+import joblib
 from dotenv import load_dotenv
 import os
 import pandas as pd
@@ -11,8 +11,9 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app)  # Permet à React d’accéder à l’API
 
+
 model_classifier = joblib.load("test_dream_model_characters_code.pkl")
-preprocessor = joblib.load("preprocessor_pipeline.pkl")
+preprocessor = joblib.load("preprocessor_pipeline_fit.pkl")
 print(preprocessor)
 
 @app.route("/classificationDream/request", methods=["POST"])
@@ -24,35 +25,41 @@ def classify_dream():
         if not dream_text:
             return jsonify({"error": "No dream provided"}), 400
         dream_df = pd.DataFrame({ 
-            "characters_code": [""],  # Remplissez avec des valeurs appropriées
+            "characters_code": [""],
             "emotions_code": [""],
             "aggression_code": [""],
             "friendliness_code": [""],
             "sexuality_code": [""],
             "text_dream": [dream_text],
         })
-        data_transformed = preprocessor.transform(dream_df)
-        print("data_transformed", data_transformed)
-        vectorizer_feature_names = preprocessor.transformers_[1][1].named_steps['vectorizer'].get_feature_names_out()
-        
-        
-        vectorized_data = data_transformed[:, :len(vectorizer_feature_names)]  # Garder seulement les colonnes du vectoriseur
-        dream_vectorize_df = pd.DataFrame(vectorized_data, columns=vectorizer_feature_names)
-        print(dream_vectorize_df[dream_vectorize_df == 1])
 
+        data_transformed = preprocessor.transform(dream_df)
+        vectorizer_feature_names = preprocessor.transformers_[1][1].named_steps['vectorizer'].get_feature_names_out()       
+        vectorized_data = data_transformed[:, :len(vectorizer_feature_names)]
+        dream_vectorize_df = pd.DataFrame(vectorized_data, columns=vectorizer_feature_names)
+
+        # prédiction du rêve
         prediction_classifier = model_classifier.predict(dream_vectorize_df)
-        print("prediction_classifier", prediction_classifier)
-        
-        # Identifier les indices des colonnes où la prédiction est 1
-        # Par exemple, si prediction_classifier[i] == 1, on garde cette colonne
-        predicted_columns = [vectorizer_feature_names[i] for i in range(len(prediction_classifier[0])) if prediction_classifier[0][i] == 1]
-        
-        # Si vous souhaitez retourner un tableau des codes (par exemple: 'characters_code_1FSA', 'characters_code_2ISA', etc.)
-        # Vous pouvez ajuster cette partie selon les noms des colonnes de vos données
-        response_data = {
-            "predicted_codes": predicted_columns  # Les colonnes où la prédiction est 1
-        }
-        
+        vectorizer_labels_names = preprocessor.transformers_[0][1].named_steps['mlb'].get_feature_names_out()    
+
+        # Identifier les indices des colonnes où la prédiction est à 1
+        predicted_columns = [vectorizer_labels_names[i] for i in range(len(prediction_classifier[0])) if prediction_classifier[0][i] == 1]
+
+        result_dict = {}
+
+        for col in predicted_columns:
+            # On sépare le nom de la catégorie (avant le '_') et la valeur (après le '_')
+            category, value = col.rsplit('_', 1)
+    
+            # On crée une clé dans le dictionnaire si celle-ci n'existe pas
+            if category not in result_dict:
+                result_dict[category] = []
+    
+            # On ajoute la valeur à la liste associée à la catégorie
+            result_dict[category].append(value)
+
+        response_data = result_dict
+        print("response_data", response_data)
         # Retourner les résultats en JSON
         return jsonify(response_data)
 

@@ -7,8 +7,6 @@ from sklearn.preprocessing import MultiLabelBinarizer
 import pandas as pd
 import spacy
 import unidecode
-import nltk
-from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 import joblib
@@ -64,15 +62,18 @@ class MultiLabelBinarizerTransformer(BaseEstimator, TransformerMixin):
         transformed_data = []
     
         for column in X.columns:
-            filtered_column = X[column].apply(
-                lambda x: [label for label in x if re.match(r'^\d', label)]
-            )
+            if column == "characters_code" :
+                filtered_column = [
+                [label for label in row if re.match(r'^\d', label)]
+                for row in X[column]
+                ]
+            else : filtered_column = X[column]
             transformed_column = self.mlb_dict[column].transform(filtered_column)
             transformed_data.append(csr_matrix(transformed_column))
     
         transformed_data = hstack(transformed_data)
 
-        # Ajoute cette ligne pour voir le nombre de colonnes générées   
+        # on nomme les colonnes générées   
         column_names = self.get_feature_names_out(X.columns)    
         transformed_data = pd.DataFrame.sparse.from_spmatrix(transformed_data, columns=column_names)
         return transformed_data
@@ -86,20 +87,22 @@ class MultiLabelBinarizerTransformer(BaseEstimator, TransformerMixin):
 
 # Stockage temporaire en RAM (ou sur disque avec location="/tmp")
 memory_categorical_transformer = Memory(location=None, verbose=0)
+
+# Création du pipeline de transformations pour les labels
 categorical_transformer = Pipeline(steps=[
     ('clean_columns', FunctionTransformer(clean_code_column)),
     ("mlb", MultiLabelBinarizerTransformer())
 ], memory=memory_categorical_transformer)
 
-# Preprocessing for text
+
+
+# Preprocessing pour le text
 text_cols = ['text_dream']
 
-# Téléchargement des ressources NLTK
-nltk.download('wordnet')
-nltk.download('stopwords')
 
 # Charger le modèle spaCy
 nlp = spacy.load("en_core_web_lg")
+stop_words = spacy.lang.en.stop_words.STOP_WORDS
 
 lemmatizer = WordNetLemmatizer()
 # Fonction de filtrage des lignes vides
@@ -116,7 +119,6 @@ class TextProcessor(BaseEstimator, TransformerMixin):
 
     def transform(self, X):
         results = []
-        stop_words = set(stopwords.words('english'))
         
         for dream in X['text_dream']:
             # Normalisation des accents et mise en minuscule
@@ -127,14 +129,12 @@ class TextProcessor(BaseEstimator, TransformerMixin):
             
             # Extraction des lemmes (mots de base)
             lemmatized_words = [
-                lemmatizer.lemmatize(token.text, pos='v') if token.pos_ == 'VERB' else
-                lemmatizer.lemmatize(token.text, pos='n') if token.pos_ == 'NOUN' else
-                lemmatizer.lemmatize(token.text, pos='a') if token.pos_ == 'ADJ' else
-                lemmatizer.lemmatize(token.text)
+                token.lemma_
                 for token in doc
                 if token.is_alpha and token.text not in stop_words and token.pos_ not in ['PUNCT', 'CCONJ', 'DET']
             ]
             dico_ref = list(set(lemmatized_words))
+
             # Ajout des entités extraites
             entities = [(entity.text, entity.label_) for entity in doc.ents]
             
@@ -206,12 +206,12 @@ class VectorizerProcessor(BaseEstimator, TransformerMixin):
 memory_text_transformer = Memory(location=None, verbose=0)
 
 text_transformer = Pipeline(steps=[
-    ('filter_empty_text', FunctionTransformer(filter_empty_text, validate=False)),  # Fonction de filtrage des textes vides
+    ('filter_empty_text', FunctionTransformer(filter_empty_text, validate=False)),
     ('nlp', TextProcessor()),  # Traitement NLP
     ('vectorizer', VectorizerProcessor()),  # encodage
 ], memory = memory_text_transformer)
 
-# Bundle preprocessing for numerical and categorical data
+# Création du pipeline de transformations pour les features
 preprocessor = ColumnTransformer(
     transformers=[
         ('cat', categorical_transformer, categorical_cols),
@@ -239,9 +239,9 @@ multi_target_classifier = MultiOutputClassifier(model_classifier)
 
 # GridSearchCV pour la classification
 param_grid_classifier = {
-    'estimator__model_classifier__n_estimators': [800], 
-    'estimator__model_classifier__learning_rate': [0.8],
-    'estimator__model_classifier__max_depth': [5]
+    'estimator__model_classifier__n_estimators': [500], 
+    'estimator__model_classifier__learning_rate': [0.08],
+    'estimator__model_classifier__max_depth': [4]
 }
 
 grid_search_classifier = GridSearchCV(

@@ -12,7 +12,7 @@ import seaborn as sns
 
 
 # Paramètre clé : seuil minimal d'échantillons par classe
-MIN_SAMPLES_PER_CLASS = 50
+MIN_SAMPLES_PER_CLASS = 300
 # Charger le modèle pré-entraîné
 model_grid_search_classifier = joblib.load("model_grid_search_classifier_pipeline.pkl")
 
@@ -24,13 +24,6 @@ categorical_cols_for_trainning_model = ["characters_code"]
 
 nlp_types_labels = [col for col in df.columns if any(col.startswith(prefix) for prefix in columns_to_X)]
 
-# initialisation du nombre d'itération
-iteration_count = 0
-
-# réinitialisation du dataframe qui a été consommé précédement
-df = pd.read_csv("test_df_after_preprocessing.csv")
-iteration_count += 1
-print("Iteration:", iteration_count)
 # permet de lancer un chronométre afin de connaître le temps d'une itération 
 start_time = time.time()
 
@@ -58,9 +51,14 @@ for category in categorical_cols_for_trainning_model:
     # séparation des jeux de données pour l'entrainement et pour les tests
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
     model = model_grid_search_classifier.fit(X_train, y_train)
-    y_preds = model.predict(X_test)
 
-# Évaluation
+    
+    # Prédictions sur le jeu de test et le jeu d'entraînement
+    y_train_preds = model.predict(X_train)
+    y_test_preds = model.predict(X_test)
+
+    # Évaluation sur les données d'entraînement
+    print(f"\nÉvaluation sur les données d'entraînement pour {category}:")
     metrics = {
         "Accuracy": accuracy_score,
         "Precision": lambda y_true, y_pred: precision_score(y_true, y_pred, average="weighted"),
@@ -69,21 +67,27 @@ for category in categorical_cols_for_trainning_model:
     }
 
     for metric_name, metric_func in metrics.items():
-        score = metric_func(y_test, y_preds)
-        print(f"{metric_name}: {score:.4f}")
+        score = metric_func(y_train, y_train_preds)
+        print(f"Entraînement - {metric_name}: {score:.4f}")
 
-       # Classification report
-    print("\nClassification Report:")
-    print(classification_report(y_test, y_preds, target_names=y.columns, zero_division=0))
+    # Évaluation sur les données de test
+    print(f"\nÉvaluation sur les données de test pour {category}:")
+    for metric_name, metric_func in metrics.items():
+        score = metric_func(y_test, y_test_preds)
+        print(f"Test - {metric_name}: {score:.4f}")
+
+    # Classification report pour le test
+    print("\nClassification Report pour le test :")
+    print(classification_report(y_test, y_test_preds, target_names=y.columns, zero_division=0))
 
     # Comparaison détaillée
     y_test_df = pd.DataFrame(y_test, columns=y.columns).reset_index(drop=True)
-    y_pred_df = pd.DataFrame(y_preds, columns=y.columns).reset_index(drop=True)
+    y_test_pred_df = pd.DataFrame(y_test_preds, columns=y.columns).reset_index(drop=True)
 
     comparison_df = pd.DataFrame()
     for class_name in y.columns:
         comparison_df[f"Réel - {class_name}"] = y_test_df[class_name]
-        comparison_df[f"Prédit - {class_name}"] = y_pred_df[class_name]
+        comparison_df[f"Prédit - {class_name}"] = y_test_pred_df[class_name]
 
     print("\n📊 Comparaison Réel vs Prédit (5 premières lignes) :")
     print(comparison_df.head())
@@ -91,20 +95,27 @@ for category in categorical_cols_for_trainning_model:
     # Sauvegarde de la comparaison complète
     comparison_df.to_csv(f'comparison_{category}.csv', index=False)
     print(f"Comparaison complète sauvegardée dans 'comparison_{category}.csv'")
-    '''
-    # Matrice de confusion
+
+    # Matrice de confusion pour le test
     plt.figure(figsize=(12, 10))
-    cm = confusion_matrix(y_test.values.argmax(axis=1), y_preds.argmax(axis=1))
-    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
-    plt.title(f'Matrice de confusion pour {category}')
+    cm = confusion_matrix(y_test.values.argmax(axis=1), y_test_preds.argmax(axis=1))
+
+    # On remplace les indices par les noms des classes dans les axes
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
+    xticklabels=y.columns, yticklabels=y.columns)
+
+    # Titre et labels des axes
+    plt.title(f'Matrice de confusion pour {category} (Test)')
     plt.ylabel('Vraie classe')
     plt.xlabel('Classe prédite')
-    plt.show()
-    '''
-models[category] = model
 
-# Sauvegarde du modèle spécifique à cette famille de labels
-joblib.dump(model, f'test_dream_model_{category}.pkl')
+    # Afficher la matrice de confusion
+    plt.show()
+
+    models[category] = model
+
+    # Sauvegarde du modèle spécifique à cette famille de labels
+    joblib.dump(model, f'test_dream_model_{category}.pkl')
 
 end_time = time.time()
-print(f"Temps pour l'itération {iteration_count}: {end_time - start_time:.6f} secondes")
+print(f"Temps de l'apprentissage: {end_time - start_time:.6f} secondes")

@@ -24,10 +24,11 @@ categorical_cols = ["characters_code", "emotions_code", "aggression_code", "frie
 # Colonne textes
 text_cols = ["text_dream"]
 
-# Entraînement du pipeline de prétraitement...
+# Entraînement du pipeline de prétraitement
 data_transformed = preprocessor.fit_transform(df)
 
 joblib.dump(preprocessor, "preprocessor_pipeline_fit.pkl")
+
 # Vérification que le préprocesseur est bien ajusté
 try:
     # Récupération des noms de colonnes transformées
@@ -40,9 +41,3 @@ except Exception as e:
     print(f"Erreur lors de la vérification du préprocesseur : {e}")
     print("Le préprocesseur n'a peut-être pas été correctement ajusté.")
 
-# Conversion en DataFrame
-df_transformed = pd.DataFrame(data_transformed, columns=all_feature_names)
-filtered_columns = [col for col in df_transformed.columns if not any(col.startswith(prefix) for prefix in categorical_cols)]
-
-# Afficher les colonnes restantes
-df_transformed.to_csv("test_df_after_preprocessing.csv", index=False)
