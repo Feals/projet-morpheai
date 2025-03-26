@@ -41,3 +41,9 @@ except Exception as e:
     print(f"Erreur lors de la vérification du préprocesseur : {e}")
     print("Le préprocesseur n'a peut-être pas été correctement ajusté.")
 
+# Conversion en DataFrame
+df_transformed = pd.DataFrame(data_transformed, columns=all_feature_names)
+
+# création du dataset après préprocessing pour ne pas avoir à refaire les transformations à chaques fois
+df_transformed.to_csv("test_df_after_preprocessing.csv", index=False)
+

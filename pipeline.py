@@ -239,9 +239,9 @@ multi_target_classifier = MultiOutputClassifier(model_classifier)
 
 # GridSearchCV pour la classification
 param_grid_classifier = {
-    'estimator__model_classifier__n_estimators': [500], 
+    'estimator__model_classifier__n_estimators': [350], 
     'estimator__model_classifier__learning_rate': [0.08],
-    'estimator__model_classifier__max_depth': [4]
+    'estimator__model_classifier__max_depth': [5]
 }
 
 grid_search_classifier = GridSearchCV(
